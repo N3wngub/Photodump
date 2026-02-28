@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IG Story Photo Dump</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
+        
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* ซ่อน Scrollbar แต่ยังเลื่อนได้ */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* กรอบจำลองหน้าจอมือถือ */
+        .phone-frame {
+            aspect-ratio: 9/16;
+            max-height: 85vh;
+            width: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border-radius: 1.5rem;
+            overflow: hidden;
+            background-color: #ffffff;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex items-center justify-center">
+
+    <div class="max-w-6xl w-full mx-auto flex flex-col lg:flex-row gap-8 items-start">
+        
+        <!-- แผงควบคุม (ด้านซ้าย) -->
+        <div class="w-full lg:w-1/3 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-6">
+            
+            <div>
+                <h1 class="text-2xl font-semibold text-gray-800 tracking-tight">IG Photo Dump</h1>
+                <p class="text-gray-500 text-sm mt-1">รวมรูปหลายใบลง IG Story อัตโนมัติ</p>
+            </div>
+
+            <!-- ส่วนอัปโหลดรูปภาพ -->
+            <div>
+                <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
+                <button id="uploadBtn" class="w-full py-8 border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all group">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <div class="text-center">
+                        <span class="block text-gray-700 font-medium group-hover:text-blue-600">คลิกเพื่อเลือกรูปภาพ</span>
+                        <span class="block text-xs text-gray-400 mt-1">เลือกได้หลายรูปพร้อมกัน</span>
+                    </div>
+                </button>
+            </div>
+
+            <!-- เลือกสีพื้นหลัง -->
+            <div>
+                <span class="text-sm font-medium text-gray-600 block mb-3">สีพื้นหลัง</span>
+                <div class="flex gap-3" id="bgSelectors">
+                    <button data-bg="#ffffff" class="w-8 h-8 rounded-full border border-gray-200 bg-white ring-2 ring-offset-2 ring-blue-500 shadow-sm"></button>
+                    <button data-bg="#121212" class="w-8 h-8 rounded-full border border-gray-800 bg-[#121212] hover:scale-110 transition-transform"></button>
+                    <button data-bg="#EAE6DF" class="w-8 h-8 rounded-full border border-gray-300 bg-[#EAE6DF] hover:scale-110 transition-transform"></button>
+                    <button data-bg="#1e293b" class="w-8 h-8 rounded-full border border-gray-300 bg-slate-800 hover:scale-110 transition-transform"></button>
+                </div>
+            </div>
+
+            <!-- รายการรูปที่อัปโหลด -->
+            <div id="imageListContainer" class="hidden flex-col gap-3">
+                <div class="flex justify-between items-end">
+                    <span class="text-sm font-medium text-gray-600">รูปที่เลือก (<span id="imageCount">0</span>)</span>
+                    <button id="clearBtn" class="text-xs text-red-500 hover:text-red-600 font-medium">ลบทั้งหมด</button>
+                </div>
+                <div id="imageThumbnails" class="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                    <!-- Thumbnail จะถูกเพิ่มที่นี่ผ่าน JS -->
+                </div>
+            </div>
+
+            <!-- ปุ่มดาวน์โหลด -->
+            <button id="downloadBtn" class="w-full py-4 mt-2 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                บันทึกรูปภาพ (1080x1920)
+            </button>
+        </div>
+
+        <!-- พื้นที่พรีวิว (ด้านขวา) -->
+        <div class="w-full lg:w-2/3 flex justify-center items-center">
+            <div class="phone-frame ring-8 ring-gray-900/5">
+                <!-- ตั้งค่าความละเอียดจริงของ IG Story -->
+                <canvas id="canvas" width="1080" height="1920"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ตัวแปรเก็บข้อมูล
+        let imagesData = [];
+        let currentBgColor = '#ffffff';
+        
+        // การตั้งค่า Canvas
+        const CANVAS_WIDTH = 1080;
+        const CANVAS_HEIGHT = 1920;
+        const GAP = 24; // ระยะห่างระหว่างรูป
+        const RADIUS = 32; // ความโค้งมนของรูป
+        
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const imageListContainer = document.getElementById('imageListContainer');
+        const imageThumbnails = document.getElementById('imageThumbnails');
+        const imageCount = document.getElementById('imageCount');
+        const bgSelectors = document.querySelectorAll('#bgSelectors button');
+
+        // ฟังก์ชันวาดรูปตอนเริ่มต้น (Canvas เปล่า)
+        function drawInitialState() {
+            ctx.fillStyle = currentBgColor;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            if (imagesData.length === 0) {
+                ctx.fillStyle = currentBgColor === '#ffffff' || currentBgColor === '#EAE6DF' ? '#9ca3af' : '#6b7280';
+                ctx.font = '500 40px Kanit, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('พรีวิวจะแสดงที่นี่', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+            }
+        }
+
+        // จัดการเมื่อคลิกเปลี่ยนสีพื้นหลัง
+        bgSelectors.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // อัปเดต UI ปุ่มสี
+                bgSelectors.forEach(b => {
+                    b.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+                });
+                e.target.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+                
+                // เปลี่ยนสีและวาดใหม่
+                currentBgColor = e.target.dataset.bg;
+                renderCanvas();
+            });
+        });
+
+        // เปิดหน้าต่างเลือกไฟล์
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // จัดการเมื่อเลือกไฟล์
+        fileInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+
+            // ปรับปุ่มดาวน์โหลดสถานะกำลังโหลด
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = 'กำลังประมวลผล...';
+
+            // โหลดรูปภาพ
+            const newImages = await Promise.all(files.map(file => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => resolve({ id: Date.now() + Math.random(), file, imgObj: img });
+                        img.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }));
+
+            imagesData = [...imagesData, ...newImages];
+            updateUI();
+            renderCanvas();
+
+            // คืนค่าปุ่มดาวน์โหลด
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                บันทึกรูปภาพ (1080x1920)
+            `;
+            fileInput.value = ''; // รีเซ็ต input
+        });
+
+        // อัปเดต UI (รายการรูปขนาดย่อ)
+        function updateUI() {
+            if (imagesData.length > 0) {
+                imageListContainer.classList.remove('hidden');
+                imageListContainer.classList.add('flex');
+            } else {
+                imageListContainer.classList.add('hidden');
+                imageListContainer.classList.remove('flex');
+            }
+
+            imageCount.textContent = imagesData.length;
+            imageThumbnails.innerHTML = '';
+
+            imagesData.forEach((data, index) => {
+                const div = document.createElement('div');
+                div.className = 'w-14 h-14 shrink-0 rounded-lg overflow-hidden border border-gray-200 relative group';
+                
+                const img = document.createElement('img');
+                img.src = data.imgObj.src;
+                img.className = 'w-full h-full object-cover';
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = '×';
+                removeBtn.className = 'absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex justify-center items-center text-xs opacity-0 group-hover:opacity-100 transition-opacity';
+                removeBtn.onclick = () => {
+                    imagesData.splice(index, 1);
+                    updateUI();
+                    renderCanvas();
+                };
+
+                div.appendChild(img);
+                div.appendChild(removeBtn);
+                imageThumbnails.appendChild(div);
+            });
+        }
+
+        // ลบรูปภาพทั้งหมด
+        clearBtn.addEventListener('click', () => {
+            imagesData = [];
+            updateUI();
+            renderCanvas();
+        });
+
+        // คำนวณ Grid ตามจำนวนรูปภาพ ให้สัดส่วนออกมาสวยที่สุดใน 9:16
+        function calculateGrid(n) {
+            if (n === 1) return { cols: 1, rows: 1 };
+            if (n === 2) return { cols: 1, rows: 2 };
+            if (n === 3) return { cols: 1, rows: 3 };
+            if (n === 4) return { cols: 2, rows: 2 };
+            if (n <= 6) return { cols: 2, rows: 3 };
+            if (n <= 8) return { cols: 2, rows: 4 };
+            if (n <= 9) return { cols: 3, rows: 3 };
+            if (n <= 12) return { cols: 3, rows: 4 };
+            if (n <= 15) return { cols: 3, rows: 5 };
+            if (n <= 16) return { cols: 4, rows: 4 };
+            
+            // กรณีรูปเยอะกว่า 16 รูป
+            const cols = Math.ceil(Math.sqrt(n / (CANVAS_HEIGHT / CANVAS_WIDTH)));
+            const rows = Math.ceil(n / cols);
+            return { cols, rows };
+        }
+
+        // ฟังก์ชันวาดรูปภาพแบบ Cover (ตัดขอบส่วนเกิน) และทำมุมโค้ง
+        function drawImageCover(ctx, img, x, y, w, h, radius) {
+            const imgRatio = img.width / img.height;
+            const cellRatio = w / h;
+            let renderW, renderH, offsetX = 0, offsetY = 0;
+
+            if (imgRatio > cellRatio) {
+                renderH = h;
+                renderW = img.width * (h / img.height);
+                offsetX = (renderW - w) / 2;
+            } else {
+                renderW = w;
+                renderH = img.height * (w / img.width);
+                offsetY = (renderH - h) / 2;
+            }
+
+            ctx.save();
+            ctx.beginPath();
+            
+            // วาดรูปสี่เหลี่ยมมุมโค้ง
+            if (ctx.roundRect) {
+                ctx.roundRect(x, y, w, h, radius);
+            } else {
+                // Fallback สำหรับเบราว์เซอร์เก่า
+                ctx.moveTo(x + radius, y);
+                ctx.lineTo(x + w - radius, y);
+                ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+                ctx.lineTo(x + w, y + h - radius);
+                ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+                ctx.lineTo(x + radius, y + h);
+                ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+                ctx.lineTo(x, y + radius);
+                ctx.quadraticCurveTo(x, y, x + radius, y);
+            }
+            
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(img, x - offsetX, y - offsetY, renderW, renderH);
+            ctx.restore();
+        }
+
+        // ฟังก์ชันหลักวาด Canvas
+        function renderCanvas() {
+            // ล้างจอและวาดพื้นหลัง
+            ctx.fillStyle = currentBgColor;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const n = imagesData.length;
+            if (n === 0) {
+                drawInitialState();
+                return;
+            }
+
+            // คำนวณแถวและคอลัมน์
+            const grid = calculateGrid(n);
+            const { cols, rows } = grid;
+
+            let imgIndex = 0;
+
+            // คำนวณพื้นที่ (ลบขอบนอกสุดออก)
+            const padding = GAP * 2;
+            const availableWidth = CANVAS_WIDTH - (padding * 2);
+            const availableHeight = CANVAS_HEIGHT - (padding * 2);
+
+            for (let r = 0; r < rows; r++) {
+                // เช็คว่าแถวนี้มีกี่รูป (แถวสุดท้ายอาจมีรูปไม่เต็มคอลัมน์)
+                const itemsInThisRow = Math.min(cols, n - imgIndex);
+                if (itemsInThisRow <= 0) break;
+
+                // ความสูงของเซลล์
+                const cellH = (availableHeight - (GAP * (rows - 1))) / rows;
+                const posY = padding + (r * (cellH + GAP));
+
+                // ความกว้างของเซลล์ (แบ่งตามจำนวนรูปในแถว เพื่อให้จัดกึ่งกลางอัตโนมัติ)
+                const cellW = (availableWidth - (GAP * (itemsInThisRow - 1))) / itemsInThisRow;
+                
+                // หาจุดเริ่มต้นแกน X เพื่อให้อยู่กึ่งกลางหน้าจอเสมอ
+                const totalRowWidth = (cellW * itemsInThisRow) + (GAP * (itemsInThisRow - 1));
+                const startX = (CANVAS_WIDTH - totalRowWidth) / 2;
+
+                for (let c = 0; c < itemsInThisRow; c++) {
+                    const posX = startX + (c * (cellW + GAP));
+                    
+                    const imgObj = imagesData[imgIndex].imgObj;
+                    drawImageCover(ctx, imgObj, posX, posY, cellW, cellH, RADIUS);
+                    
+                    imgIndex++;
+                }
+            }
+        }
+
+        // ดาวน์โหลดรูปภาพ
+        downloadBtn.addEventListener('click', () => {
+            if (imagesData.length === 0) {
+                alert('กรุณาอัปโหลดรูปภาพก่อนดาวน์โหลด');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.download = `IG-Dump-${Date.now()}.jpg`;
+            // ใช้ JPEG คุณภาพ 90% เพื่อขนาดไฟล์ที่เหมาะสม
+            link.href = canvas.toDataURL('image/jpeg', 0.9);
+            link.click();
+        });
+
+        // วาดหน้าจอเริ่มต้น
+        drawInitialState();
+    </script>
+</body>
+</html>
+
